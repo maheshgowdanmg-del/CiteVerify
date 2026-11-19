@@ -448,7 +448,8 @@ def get_global_statistics(db_path: Optional[str] = None) -> Dict[str, Any]:
         SELECT COUNT(*) AS bad_cits FROM citations 
         WHERE verified_status IN ('DOI_NOT_FOUND', 'METADATA_MISMATCH', 'POSSIBLY_RETRACTED');
     """)
-    bad_citations = cur.fetchone()["bad_citations"] if "bad_citations" in cur.fetchone().keys() else 0
+    row_bad = cur.fetchone()
+    bad_citations = row_bad["bad_cits"] if row_bad and "bad_cits" in row_bad.keys() else 0
 
     # Evidence coverage: percentage of claims where evidence quote was retrieved
     cur.execute("""
@@ -476,6 +477,18 @@ def get_global_statistics(db_path: Optional[str] = None) -> Dict[str, Any]:
     """)
     recent = [dict(r) for r in cur.fetchall()]
 
+    # Numeric checks distribution
+    cur.execute("""
+        SELECT numeric_verdict, COUNT(*) as cnt 
+        FROM verification_results 
+        WHERE numeric_verdict IS NOT NULL AND numeric_verdict != 'NONE'
+        GROUP BY numeric_verdict;
+    """)
+    numeric_counts = {"NUMERICAL_MATCH": 0, "NUMERICAL_MISMATCH": 0, "NUMERICAL_UNCONFIRMED": 0}
+    for row in cur.fetchall():
+        if row["numeric_verdict"] in numeric_counts:
+            numeric_counts[row["numeric_verdict"]] = row["cnt"]
+
     conn.close()
 
     return {
@@ -496,5 +509,6 @@ def get_global_statistics(db_path: Optional[str] = None) -> Dict[str, Any]:
         "avg_trust_score": avg_score,
         "verdict_distribution": verdict_counts,
         "citation_integrity": citation_counts,
+        "numeric_distribution": numeric_counts,
         "recent_activity": recent
     }

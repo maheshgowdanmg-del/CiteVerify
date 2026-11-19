@@ -61,7 +61,11 @@ SAMPLE_TXT_PATH = config.BASE_DIR / "data" / "sample" / "sample_paper.txt"
 
 
 # ---------------- SESSION STATE INITIALIZATION ----------------
-if "current_doc" not in st.session_state or st.session_state.current_doc is None:
+if "upload_key" not in st.session_state:
+    st.session_state.upload_key = 0
+if "staged_file" not in st.session_state:
+    st.session_state.staged_file = None
+if "current_doc" not in st.session_state:
     recent_docs = database.list_documents()
     if recent_docs:
         st.session_state.current_doc = database.get_document_run(recent_docs[0]["id"])
@@ -145,6 +149,231 @@ with st.sidebar:
     )
 
 
+def format_file_size(bytes_len: int) -> str:
+    """Format bytes into readable string."""
+    if bytes_len < 1024:
+        return f"{bytes_len} B"
+    elif bytes_len < 1024 * 1024:
+        return f"{bytes_len / 1024:.1f} KB"
+    else:
+        return f"{bytes_len / (1024 * 1024):.2f} MB"
+
+
+def cancel_staged_file():
+    """Cancel and remove the currently staged file and reset uploader widget."""
+    st.session_state.upload_key += 1
+    st.session_state.staged_file = None
+    st.session_state.temp_extracted = None
+    st.session_state.temp_bytes = None
+    st.session_state.temp_fname = None
+    st.toast("Uploaded document cancelled and removed.", icon="🗑️")
+    st.rerun()
+
+
+def unload_active_document():
+    """Unload the active document to view global system state."""
+    st.session_state.current_doc = None
+    st.toast("Active document unloaded.", icon="ℹ️")
+    st.rerun()
+
+
+def render_upload_section(context_key: str = "main", max_claims_default: int = 20):
+    """Render a premium file upload component with File Explorer browsing, demo loader,
+    staged document card with clear cancel button, and preview tabs."""
+    if "upload_key" not in st.session_state:
+        st.session_state.upload_key = 0
+    if "staged_file" not in st.session_state:
+        st.session_state.staged_file = None
+
+    # If a file is currently staged: show File Attached Card with Cancel and Verify triggers
+    staged = st.session_state.staged_file
+    if staged is not None:
+        filename = staged["filename"]
+        meta = staged["meta"]
+        ext = meta.get("file_type", "FILE").upper()
+        icon = "📕" if ext == "PDF" else ("📘" if "DOC" in ext else "📄")
+        size_str = staged.get("size_str", format_file_size(len(staged["bytes"])))
+        pages = meta.get("page_count", 1)
+        words = meta.get("word_count", 0)
+        refs = len(meta.get("references", []))
+
+        st.markdown(f"""
+        <div class="cv-file-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+                <div style="display:flex;align-items:center;gap:14px;">
+                    <div style="font-size:2.2rem;line-height:1;">{icon}</div>
+                    <div>
+                        <div style="font-size:1.05rem;font-weight:800;color:#0F172A;">{filename}</div>
+                        <div style="font-size:0.82rem;color:#64748B;margin-top:4px;">
+                            <span>Format: <b>{ext}</b></span> &bull; 
+                            <span>Size: <b>{size_str}</b></span> &bull; 
+                            <span>Pages: <b>{pages}</b></span> &bull; 
+                            <span>Words: <b>~{words:,}</b></span> &bull; 
+                            <span>Detected References: <b>{refs}</b></span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <span class="cv-file-badge cv-badge-ready">● READY TO VERIFY</span>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_c, col_v = st.columns([1.1, 2.2])
+        with col_c:
+            if st.button("❌ Cancel / Remove File", key=f"cancel_btn_{context_key}", type="secondary", use_container_width=True):
+                cancel_staged_file()
+
+        with col_v:
+            max_c = st.slider(
+                "Maximum scientific claims to audit",
+                min_value=5, max_value=50, value=max_claims_default, step=5,
+                key=f"slider_claims_{context_key}"
+            )
+            if st.button("🚀 Verify Claims & Citations", key=f"verify_btn_{context_key}", type="primary", use_container_width=True):
+                prog_bar = st.progress(0.0)
+                status_text = st.empty()
+
+                def update_cb(pct, msg):
+                    prog_bar.progress(pct)
+                    status_text.markdown(f"**Verification Progress:** {msg}")
+
+                try:
+                    run_res = pipeline.run_full_verification_pipeline(
+                        staged["bytes"],
+                        staged["filename"],
+                        max_claims=max_c,
+                        progress_callback=update_cb
+                    )
+                    st.session_state.current_doc = run_res
+                    st.session_state.staged_file = None
+                    status_text.empty()
+                    prog_bar.empty()
+                    st.success(f"Verification complete! Audited {len(run_res['claims'])} claims.")
+                    st.session_state.selected_page = "Claim Verification"
+                    st.rerun()
+                except Exception as ex:
+                    status_text.empty()
+                    prog_bar.empty()
+                    st.error(f"Verification failed: {str(ex)}")
+
+        # Document Text Preview Expander
+        with st.expander("📄 Document Text & Extracted References Preview", expanded=False):
+            tab_body, tab_refs, tab_full = st.tabs(["Body Text Preview", "References Section", "Full Raw Text"])
+            with tab_body:
+                st.text_area("Body Text", meta.get("body_text", "")[:4000], height=220, key=f"txt_body_{context_key}")
+            with tab_refs:
+                st.text_area("References Section", meta.get("references_text", ""), height=220, key=f"txt_refs_{context_key}")
+            with tab_full:
+                st.text_area("Full Text", meta.get("raw_text", "")[:4000], height=220, key=f"txt_raw_{context_key}")
+
+        return
+
+    # If no file is staged: show Dropzone with File Explorer + Demo + Local Path Tabs
+    upload_tab1, upload_tab2, upload_tab3 = st.tabs([
+        "📂 Browse from File Explorer",
+        "📚 Built-in Scientific Library",
+        "💻 Local File Path"
+    ])
+
+    with upload_tab1:
+        st.markdown("""
+        <div class="cv-dropzone">
+            <div style="font-size:2.4rem;margin-bottom:6px;">📂</div>
+            <div style="font-size:1.1rem;font-weight:700;color:#0F172A;">Browse or Drag & Drop File from File Explorer</div>
+            <div style="font-size:0.82rem;color:#64748B;margin-top:4px;">Supported Formats: PDF, DOCX, TXT &bull; Max size: 50 MB</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        up_file = st.file_uploader(
+            "Choose research document from your computer",
+            type=["pdf", "docx", "txt"],
+            key=f"file_uploader_{context_key}_{st.session_state.upload_key}",
+            label_visibility="collapsed"
+        )
+        if up_file is not None:
+            raw_b = up_file.getvalue()
+            raw_n = up_file.name
+            try:
+                meta = pdf_extractor.process_uploaded_document(raw_b, raw_n)
+                st.session_state.staged_file = {
+                    "bytes": raw_b,
+                    "filename": raw_n,
+                    "size_str": format_file_size(len(raw_b)),
+                    "meta": meta
+                }
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error parsing uploaded file: {str(e)}")
+
+    with upload_tab2:
+        st.markdown("<p style='font-size:0.85rem;color:#64748B;margin-bottom:8px;'>Select a peer-reviewed benchmark document with known valid/fabricated claims:</p>", unsafe_allow_html=True)
+        demo_papers = {
+            "Oncology AI Screening (sample_paper.txt)": {
+                "file": "sample_paper.txt",
+                "desc": "Breast cancer deep learning trial containing supported benchmarks, 2 fabricated DOIs, and numerical mismatches."
+            },
+            "Clean Energy & Storage Integration (climate_renewable_energy.txt)": {
+                "file": "climate_renewable_energy.txt",
+                "desc": "Grid resilience, solar PV degradation, and utility-scale battery storage claims."
+            },
+            "Alzheimer's Disease Biomarkers (alzheimers_neuroscience.txt)": {
+                "file": "alzheimers_neuroscience.txt",
+                "desc": "Clinical evaluation of CSF p-tau217, amyloid PET imaging, and cognition decline metrics."
+            }
+        }
+        chosen_demo_label = st.selectbox(
+            "Select Demo Document",
+            list(demo_papers.keys()),
+            key=f"sel_demo_{context_key}"
+        )
+        st.caption(f"ℹ️ {demo_papers[chosen_demo_label]['desc']}")
+        if st.button("📄 Load Selected Demo Paper", key=f"btn_demo_{context_key}", use_container_width=True):
+            p_file = demo_papers[chosen_demo_label]["file"]
+            sample_p = config.BASE_DIR / "data" / "sample" / p_file
+            if sample_p.exists():
+                with open(sample_p, "rb") as f:
+                    raw_b = f.read()
+                meta = pdf_extractor.process_uploaded_document(raw_b, p_file)
+                st.session_state.staged_file = {
+                    "bytes": raw_b,
+                    "filename": p_file,
+                    "size_str": format_file_size(len(raw_b)),
+                    "meta": meta
+                }
+                st.rerun()
+            else:
+                st.error("Demo file could not be found.")
+
+    with upload_tab3:
+        st.markdown("<p style='font-size:0.85rem;color:#64748B;margin-bottom:8px;'>Enter absolute path to a file on your computer:</p>", unsafe_allow_html=True)
+        path_input = st.text_input(
+            "File Explorer Absolute Path",
+            placeholder="e.g. C:/Users/Name/Documents/paper.pdf",
+            key=f"local_path_inp_{context_key}",
+            label_visibility="collapsed"
+        )
+        if st.button("📂 Load from Local Path", key=f"btn_path_{context_key}", use_container_width=True):
+            if path_input and Path(path_input).exists():
+                p_obj = Path(path_input)
+                if p_obj.suffix.lower() in [".pdf", ".docx", ".txt"]:
+                    with open(p_obj, "rb") as f:
+                        raw_b = f.read()
+                    meta = pdf_extractor.process_uploaded_document(raw_b, p_obj.name)
+                    st.session_state.staged_file = {
+                        "bytes": raw_b,
+                        "filename": p_obj.name,
+                        "size_str": format_file_size(len(raw_b)),
+                        "meta": meta
+                    }
+                    st.rerun()
+                else:
+                    st.error("Unsupported file extension. Please select .pdf, .docx, or .txt.")
+            else:
+                st.error("Specified file path does not exist on disk.")
+
+
 # ---------------- WORKSPACE ROUTER ----------------
 current_page = st.session_state.selected_page
 doc_data = st.session_state.current_doc
@@ -164,76 +393,89 @@ if current_page == "Overview":
 
     stats = database.get_global_statistics()
 
-    if stats["total_documents"] == 0 and not doc_data:
-        # Onboarding State
-        st.info("👋 Welcome to CiteVerify AI! No documents have been verified yet.")
-        c_on1, c_on2 = st.columns([2, 1])
-        with c_on1:
-            st.markdown("""
-            ### Quick Start Demonstration
-            To explore CiteVerify immediately with realistic peer-reviewed oncology literature containing
-            supported benchmarks, numerical mismatches, and fabricated citations:
-            """)
-            if st.button("🚀 Load Sample Research Paper & Run Verification", type="primary"):
-                if SAMPLE_TXT_PATH.exists():
-                    with open(SAMPLE_TXT_PATH, "rb") as f:
-                        b_data = f.read()
-                    with st.spinner("Analyzing sample document through 6-stage verification pipeline..."):
-                        run_res = pipeline.run_full_verification_pipeline(b_data, "sample_paper.txt", max_claims=15)
-                        st.session_state.current_doc = run_res
-                        st.session_state.selected_page = "Overview"
-                        st.success("Sample paper successfully analyzed!")
-                        st.rerun()
-        with c_on2:
-            st.markdown("""
-            **What CiteVerify checks:**
-            - 🛡️ DOI validity in Crossref & OpenAlex
-            - 📊 Exact numerical & statistical consistency
-            - 📑 Original evidence excerpt verification
-            - ⚡ Literature consensus & contradictions
-            """)
-        st.stop()
-
     # Active Document Banner if a document is loaded
     if doc_data:
         d_meta = doc_data["document"]
         t_sc = doc_data.get("trust_score") or {}
         score_val = t_sc.get("score", d_meta.get("trust_score", 0.0))
         grade_val = t_sc.get("grade", d_meta.get("trust_grade", "Evaluated"))
+        claims_cnt = len(doc_data.get('claims', []))
+        cits_cnt = len(doc_data.get('citations', []))
         
         st.markdown(f"""
-        <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:12px;padding:12px 18px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-            <div>
-                <span style="font-size:0.75rem;font-weight:700;color:#1D4ED8;text-transform:uppercase;">Active Document</span>
-                <div style="font-size:1.1rem;font-weight:800;color:#1E3A8A;">{d_meta['filename']}</div>
-                <div style="font-size:0.8rem;color:#64748B;">{len(doc_data.get('claims', []))} Claims &bull; {len(doc_data.get('citations', []))} References &bull; {d_meta.get('page_count', 1)} Page(s)</div>
-            </div>
-            <div style="text-align:right;">
-                <span style="font-size:0.75rem;color:#64748B;">Academic Trust Score</span>
-                <div style="font-size:1.4rem;font-weight:800;color:#2563EB;">{score_val}/100</div>
-                <div style="font-size:0.75rem;font-weight:600;color:#1E40AF;">{grade_val}</div>
+        <div style="background:#FFFFFF;border:1px solid #CBD5E1;border-left:5px solid #2563EB;border-radius:14px;padding:18px 24px;margin-bottom:18px;box-shadow:0 2px 10px rgba(15,23,42,0.04);">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                <div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span style="font-size:0.75rem;font-weight:700;color:#2563EB;text-transform:uppercase;letter-spacing:0.04em;">Active Document Under Audit</span>
+                        <span class="cv-file-badge cv-badge-analyzed">ACTIVE</span>
+                    </div>
+                    <div style="font-size:1.25rem;font-weight:800;color:#0F172A;margin-top:2px;">{d_meta['filename']}</div>
+                    <div style="font-size:0.82rem;color:#64748B;margin-top:4px;">
+                        <span><b>{claims_cnt}</b> Claims Audited</span> &bull; 
+                        <span><b>{cits_cnt}</b> References</span> &bull; 
+                        <span><b>{d_meta.get('page_count', 1)}</b> Page(s)</span> &bull; 
+                        <span>Analyzed: {d_meta.get('created_at', 'Recently')}</span>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:0.78rem;color:#64748B;font-weight:600;">Academic Trust Score</div>
+                    <div style="font-size:2rem;font-weight:800;color:#2563EB;line-height:1.1;">{score_val}/100</div>
+                    <div style="font-size:0.82rem;font-weight:700;color:#1E40AF;">{grade_val}</div>
+                </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
+        # Quick Navigation Bar for Active Document
+        nb1, nb2, nb3, nb4, nb5 = st.columns(5)
+        with nb1:
+            if st.button("📋 View Claim Audit", use_container_width=True):
+                st.session_state.selected_page = "Claim Verification"
+                st.rerun()
+        with nb2:
+            if st.button("🛡️ Citation Fraud", use_container_width=True):
+                st.session_state.selected_page = "Citation Fraud Detection"
+                st.rerun()
+        with nb3:
+            if st.button("🕸️ Citation Trust Graph", use_container_width=True):
+                st.session_state.selected_page = "Citation Trust Graph"
+                st.rerun()
+        with nb4:
+            if st.button("📥 Download PDF Report", use_container_width=True):
+                st.session_state.selected_page = "Verification Reports"
+                st.rerun()
+        with nb5:
+            if st.button("🔄 Unload Document", use_container_width=True):
+                unload_active_document()
+
+        st.markdown("<div style='margin-bottom:14px;'></div>", unsafe_allow_html=True)
+
+    # Quick Upload & Audit Center right on the Overview Dashboard!
+    with st.expander("📤 Quick Document Audit & File Upload (File Explorer / Demo)", expanded=(st.session_state.staged_file is not None or not doc_data)):
+        render_upload_section(context_key="overview_dash", max_claims_default=15)
+
     # Global KPI Metric Cards
-    k1, k2, k3, k4 = st.columns(4)
+    k1, k2, k3, k4, k5 = st.columns(5)
+    supp_pct = (stats['supported_claims'] / max(1, stats['total_claims'])) * 100
     with k1:
         st.markdown(theme.render_kpi_card("Total Documents", stats["total_documents"], "Stored in SQLite", "#2563EB"), unsafe_allow_html=True)
     with k2:
-        st.markdown(theme.render_kpi_card("Claims Audited", stats["total_claims"], f"{stats['supported_claims']} Supported", "#10B981"), unsafe_allow_html=True)
+        st.markdown(theme.render_kpi_card("Claims Audited", stats["total_claims"], f"{stats['supported_claims']} Supported ({supp_pct:.0f}%)", "#10B981"), unsafe_allow_html=True)
     with k3:
         st.markdown(theme.render_kpi_card("Integrity Flags", stats["invalid_or_mismatched_citations"], "Fabricated / Mismatched DOIs", "#EF4444"), unsafe_allow_html=True)
     with k4:
         st.markdown(theme.render_kpi_card("Evidence Coverage", f"{stats['evidence_coverage']}%", "Verbatim Quotations", "#8B5CF6"), unsafe_allow_html=True)
+    with k5:
+        st.markdown(theme.render_kpi_card("Avg Trust Score", f"{stats['avg_trust_score']}/100", "Overall Academic Integrity", "#F59E0B"), unsafe_allow_html=True)
 
     st.markdown("<br/>", unsafe_allow_html=True)
 
     # Analytical Charts Row
-    ch1, ch2 = st.columns(2)
+    ch1, ch2, ch3 = st.columns([1.2, 1.2, 1.0])
 
     with ch1:
-        st.markdown("#### Claim Verification Verdict Distribution")
+        st.markdown("#### Claim Verification Verdicts")
         v_dist = stats["verdict_distribution"]
         if sum(v_dist.values()) > 0:
             df_v = pd.DataFrame([
@@ -247,13 +489,13 @@ if current_page == "Overview":
                 hole=0.45
             )
             fig_v.update_traces(textposition='inside', textinfo='percent+label')
-            fig_v.update_layout(showlegend=False, margin=dict(t=20, b=20, l=20, r=20), height=300)
+            fig_v.update_layout(showlegend=False, margin=dict(t=20, b=20, l=20, r=20), height=280)
             st.plotly_chart(fig_v, use_container_width=True)
         else:
             st.info("No claim verification results to chart.")
 
     with ch2:
-        st.markdown("#### Citation Integrity & Fraud Engine Status")
+        st.markdown("#### Citation Integrity Status")
         c_dist = stats["citation_integrity"]
         if sum(c_dist.values()) > 0:
             df_c = pd.DataFrame([
@@ -266,10 +508,40 @@ if current_page == "Overview":
                 color_discrete_map={row["Status"]: row["Color"] for _, row in df_c.iterrows()},
                 text="Count"
             )
-            fig_c.update_layout(showlegend=False, xaxis_title="", yaxis_title="Citations", margin=dict(t=20, b=20, l=20, r=20), height=300)
+            fig_c.update_layout(showlegend=False, xaxis_title="", yaxis_title="Citations", margin=dict(t=20, b=20, l=20, r=20), height=280)
             st.plotly_chart(fig_c, use_container_width=True)
         else:
             st.info("No citations evaluated to chart.")
+
+    with ch3:
+        st.markdown("#### Numerical Consistency")
+        n_dist = stats.get("numeric_distribution", {})
+        if sum(n_dist.values()) > 0:
+            n_colors = {
+                "NUMERICAL_MATCH": "#10B981",
+                "NUMERICAL_MISMATCH": "#EF4444",
+                "NUMERICAL_UNCONFIRMED": "#94A3B8"
+            }
+            n_labels = {
+                "NUMERICAL_MATCH": "Verified Match",
+                "NUMERICAL_MISMATCH": "Mismatch / Distortion",
+                "NUMERICAL_UNCONFIRMED": "Unconfirmed in Abstract"
+            }
+            df_n = pd.DataFrame([
+                {"Metric": n_labels.get(k, k), "Count": v, "Color": n_colors.get(k, "#64748B")}
+                for k, v in n_dist.items() if v > 0
+            ])
+            fig_n = px.pie(
+                df_n, values="Count", names="Metric",
+                color="Metric",
+                color_discrete_map={row["Metric"]: row["Color"] for _, row in df_n.iterrows()},
+                hole=0.45
+            )
+            fig_n.update_traces(textposition='inside', textinfo='percent+label')
+            fig_n.update_layout(showlegend=False, margin=dict(t=20, b=20, l=20, r=20), height=280)
+            st.plotly_chart(fig_n, use_container_width=True)
+        else:
+            st.info("No numerical checks evaluated.")
 
     # Recent Activity Table
     st.markdown("#### Recent Document Analyses")
@@ -299,89 +571,7 @@ elif current_page == "Document Analysis":
         "CiteVerify parses document structures, separates body claims from bibliographies, and detects citations."
     ), unsafe_allow_html=True)
 
-    u1, u2 = st.columns([2.5, 1.5])
-    with u1:
-        uploaded_file = st.file_uploader("Choose a research document (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"])
-    with u2:
-        st.markdown("<p style='font-size:0.85rem;font-weight:700;color:#0F172A;margin-top:2px;'>Or Load Built-in Demo Manuscript</p>", unsafe_allow_html=True)
-        demo_choice = st.selectbox(
-            "Demo Dataset",
-            [
-                "Oncology AI (sample_paper.txt)",
-                "Clean Energy & Storage (climate_renewable_energy.txt)",
-                "Alzheimer's Neuroscience (alzheimers_neuroscience.txt)"
-            ],
-            label_visibility="collapsed"
-        )
-        load_demo = st.button("📄 Load Selected Demo Paper", use_container_width=True)
-
-    max_c = st.slider("Maximum claims to verify", min_value=5, max_value=50, value=20, step=5)
-
-    doc_bytes = None
-    doc_fname = ""
-
-    if uploaded_file is not None:
-        doc_bytes = uploaded_file.getvalue()
-        doc_fname = uploaded_file.name
-    elif load_demo:
-        demo_map = {
-            "Oncology AI (sample_paper.txt)": "sample_paper.txt",
-            "Clean Energy & Storage (climate_renewable_energy.txt)": "climate_renewable_energy.txt",
-            "Alzheimer's Neuroscience (alzheimers_neuroscience.txt)": "alzheimers_neuroscience.txt"
-        }
-        chosen_f = demo_map.get(demo_choice, "sample_paper.txt")
-        chosen_p = config.BASE_DIR / "data" / "sample" / chosen_f
-        if chosen_p.exists():
-            with open(chosen_p, "rb") as f:
-                doc_bytes = f.read()
-            doc_fname = chosen_f
-
-    if doc_bytes:
-        try:
-            doc_meta = pdf_extractor.process_uploaded_document(doc_bytes, doc_fname)
-            st.session_state.temp_extracted = doc_meta
-            st.session_state.temp_bytes = doc_bytes
-            st.session_state.temp_fname = doc_fname
-
-            # Display Metadata Cards
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("File Name", doc_meta["filename"])
-            m2.metric("Format", doc_meta["file_type"])
-            m3.metric("Pages", doc_meta["page_count"])
-            m4.metric("Word Count", f"{doc_meta['word_count']:,}")
-
-            # Text Preview Expander
-            with st.expander("📄 Extracted Document Preview", expanded=False):
-                tab_body, tab_refs, tab_full = st.tabs(["Body Text", "References Section", "Full Raw Text"])
-                with tab_body:
-                    st.text_area("Body Text", doc_meta["body_text"][:4000], height=250)
-                with tab_refs:
-                    st.text_area("References Section", doc_meta["references_text"], height=250)
-                with tab_full:
-                    st.text_area("Full Text", doc_meta["raw_text"][:4000], height=250)
-
-            # Trigger Verification Pipeline
-            if st.button("🚀 Verify Claims & Citations", type="primary", use_container_width=True):
-                prog_bar = st.progress(0.0)
-                status_text = st.empty()
-
-                def update_cb(pct, msg):
-                    prog_bar.progress(pct)
-                    status_text.markdown(f"**Status:** {msg}")
-
-                run_res = pipeline.run_full_verification_pipeline(
-                    doc_bytes, doc_fname, max_claims=max_c, progress_callback=update_cb
-                )
-
-                st.session_state.current_doc = run_res
-                status_text.empty()
-                prog_bar.empty()
-                st.success(f"Verification complete! Extracted and audited {len(run_res['claims'])} claims.")
-                st.session_state.selected_page = "Claim Verification"
-                st.rerun()
-
-        except Exception as e:
-            st.error(f"Error processing document: {str(e)}")
+    render_upload_section(context_key="doc_analysis_page", max_claims_default=25)
 
 
 # ==============================================================================

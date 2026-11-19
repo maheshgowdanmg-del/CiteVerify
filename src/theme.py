@@ -265,7 +265,55 @@ header[data-testid="stHeader"] {
     box-shadow: 0 2px 10px rgba(15, 23, 42, 0.03);
     margin-bottom: 18px;
 }
+
+/* Modern Dropzone & File Card Styles */
+.cv-dropzone {
+    background: linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
+    border: 2px dashed #94A3B8;
+    border-radius: 14px;
+    padding: 24px 20px;
+    text-align: center;
+    transition: all 0.2s ease-in-out;
+    margin-bottom: 14px;
+}
+
+.cv-dropzone:hover {
+    border-color: #2563EB;
+    background: #EFF6FF;
+}
+
+.cv-file-card {
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    border-left: 5px solid #2563EB;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin: 14px 0;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.cv-file-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+
+.cv-badge-ready {
+    background: #DCFCE7;
+    color: #15803D;
+    border: 1px solid #BBF7D0;
+}
+
+.cv-badge-analyzed {
+    background: #EFF6FF;
+    color: #1D4ED8;
+    border: 1px solid #BFDBFE;
+}
 </style>
+
 """
 
 
