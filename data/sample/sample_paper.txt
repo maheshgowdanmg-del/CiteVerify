@@ -1,17 +1,24 @@
-A Short Survey of Deep Learning Foundations (sample document with planted errors)
+Deep Learning in Oncology: Diagnostic Performance and Multimodal Imaging
 
-1. Introduction
+Abstract
+Recent breakthroughs in deep convolutional neural networks and vision transformers have transformed digital pathology and radiological diagnosis. In this comprehensive review, we evaluate clinical accuracy, model generalizability, and automated image segmentation benchmarks across standard diagnostic modalities.
 
-The Transformer architecture achieved 28.4 BLEU on the WMT 2014 English-to-German translation task [1]. The Transformer reached 45.0 BLEU on the WMT 2014 English-to-German task, far above all earlier systems [1]. Deep residual networks with 152 layers won the ILSVRC 2015 classification task [2]. Adam was shown to reduce training time by 90% on all neural network architectures [3].
+1. Introduction and Primary Diagnostic Benchmarks
+Recent multi-center clinical evaluations demonstrate that deep learning algorithms achieve radiologist-level performance in screening mammography, yielding an area under the receiver operating characteristic curve (AUC) of 0.945 [1]. Furthermore, comparative trials on skin lesion classification report that convolutional neural network ensembles achieved 95.0% diagnostic sensitivity across biopsy-verified melanoma cohorts [2]. 
 
-2. Health and Society
+2. Quantitative Treatment Outcomes and Algorithmic Acceleration
+In computer-aided histopathology, automated slide segmentation systems have demonstrated a 45% reduction in biopsy turnaround times across high-volume tertiary care centers [3]. Additionally, transformer-based radiotherapy dose planning models reduced contouring variation among expert radiation oncologists by 35% without degrading target volume coverage [4]. In neuro-oncological screening, advanced transformer models demonstrated a 58% relative reduction in false-positive glioma detections [5].
 
-The MMR vaccine causes autism in children [4]. Quantum gravity fields improve crop yields by 40% in arid regions [5]. Studies show that 75% of all machine learning projects fail because of poor data quality.
+3. Methodological Discrepancies and Contradictory Clinical Findings
+While initial retrospective investigations claimed that multimodal AI systems consistently outperform senior clinical pathologists in tumor grading [6], several independent prospective double-blind validation studies reported no statistically significant difference in overall clinical accuracy between AI-assisted and unassisted specialist review panels [7]. Furthermore, algorithmic performance decays markedly when evaluated on external datasets exhibiting demographic and scanner drift, showing up to a 22% drop in specificity [8].
 
-References
-
-[1] Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L., & Polosukhin, I. (2017). Attention is all you need. Advances in Neural Information Processing Systems 30. arXiv:1706.03762
-[2] He, K., Zhang, X., Ren, S., & Sun, J. (2016). Deep residual learning for image recognition. In Proceedings of CVPR (pp. 770-778). https://doi.org/10.1109/CVPR.2016.90
-[3] Kingma, D. P., & Ba, J. (2014). Adam: A method for stochastic optimization. arXiv:1412.6980
-[4] Wakefield, A. J., et al. (1998). Ileal-lymphoid-nodular hyperplasia, non-specific colitis, and pervasive developmental disorder in children. The Lancet, 351, 637-641.
-[5] Smith, J., & Doe, R. (2021). Quantum gravity fields and arid crop yield enhancement. Journal of Imaginary Results, 12(3), 45-60.
+4. References
+[1] McKinney, S. M., Sieniek, M., Godbole, V., et al. (2020). International evaluation of an AI system for breast cancer screening. Nature, 577(7788), 89–94. DOI: 10.1038/s41586-019-1799-6
+[2] Esteva, A., Kuprel, B., Novoa, R. A., et al. (2017). Dermatologist-level classification of skin cancer with deep neural networks. Nature, 542(7639), 115–118. DOI: 10.1038/nature21056
+[3] Coudray, N., Ocampo, P. S., Sakellaropoulos, T., et al. (2018). Classification and mutation prediction from non-small cell lung cancer histopathology images using deep learning. Nature Medicine, 24(10), 1559–1567. DOI: 10.1038/s41591-018-0177-5
+[4] Vaswani, A., Shazeer, N., Parmar, N., et al. (2017). Attention is all you need. Advances in Neural Information Processing Systems, 30, 5998–6008. DOI: 10.48550/arXiv.1706.03762
+[5] Falk, T., Mai, D., Bensch, R., et al. (2019). U-Net: deep learning for cell counting, detection, and morphometry. Nature Methods, 16(1), 67–70. DOI: 10.1038/s41592-018-0261-2
+[6] Topol, E. J. (2019). High-performance medicine: the convergence of human and artificial intelligence. Nature Medicine, 25(1), 44–56. DOI: 10.1038/s41591-018-0300-7
+[7] Liu, X., Faes, L., Kale, A. U., et al. (2019). A comparison of deep learning performance against health-care professionals in detecting diseases from medical imaging: a systematic review and meta-analysis. The Lancet Digital Health, 1(6), e271–e297. DOI: 10.1016/S2589-7500(19)30123-2
+[8] Zech, J. R., Badgeley, M. A., Liu, M., et al. (2018). Variable generalization performance of a deep learning model to detect pneumonia in chest radiographs: A cross-sectional study. PLoS Medicine, 15(11), e1002683. DOI: 10.1371/journal.pmed.1002683
+[9] Imaginary, A. B., & Fabrication, C. D. (2024). Hallucinated Neural Paradigms in Modern Quantum Oncology. Journal of Fabricated Evidence, 12(3), 999-1004. DOI: 10.9999/fake.doi.2024.00192

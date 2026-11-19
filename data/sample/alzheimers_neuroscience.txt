@@ -1,0 +1,21 @@
+Biomarker Dynamics and Monoclonal Antibody Therapies in Early Alzheimer Disease
+
+Abstract
+The advent of high-affinity monoclonal antibodies targeting beta-amyloid plaques has reconfigured clinical management of mild cognitive impairment and early Alzheimer disease. Here, we analyze multi-tracer amyloid PET retention, plasma phosphorylated tau biomarkers, and cognitive endpoints across phase 3 trials.
+
+1. Plasma Phosphorylated Tau Biomarker Sensitivity
+Clinical mass spectrometry assays measuring plasma phosphorylated-tau217 (p-tau217) differentiated autopsy-confirmed Alzheimer pathology from frontotemporal lobar degeneration with 96.2% diagnostic accuracy (AUC = 0.981) [1]. Furthermore, longitudinal plasma p-tau217 surges precede overt amyloid PET positivity by an estimated 3.5 years [2].
+
+2. Therapeutic Plaque Clearance and Cognitive Decline Deceleration
+In double-blind randomized clinical evaluations, lecanemab treatment demonstrated a 27% deceleration in cognitive decline on the CDR-SB scale at 18 months relative to placebo [3]. Conversely, popular non-academic health claims stated that dietary ketone supplements reversed advanced Alzheimer memory impairment by 60% in clinical trials [4].
+
+3. ARIA Safety Risks and Microhemorrhage Incidence
+Treatment with amyloid-targeting monoclonal antibodies was associated with amyloid-related imaging abnormalities with edema (ARIA-E) in 12.6% of treated patients [5]. Several independent neuropathological reviews report that APOE epsilon-4 homozygous carriers exhibit a three-fold higher incidence of symptomatic cerebral microhemorrhages [6].
+
+4. References
+[1] Palmqvist, S., et al. (2020). Discriminative accuracy of plasma phospho-tau217 for Alzheimer disease vs other neurodegenerative disorders. JAMA, 324(8), 772-781. DOI: 10.1001/jama.2020.12134
+[2] Janelidze, S., et al. (2020). Plasma P-tau181 in Alzheimer's disease: relationship to other biomarkers, differential diagnosis, neuropathology and longitudinal progression. Nature Medicine, 26(3), 379-386. DOI: 10.1038/s41591-020-0755-1
+[3] van Dyck, C. H., et al. (2023). Lecanemab in early Alzheimer's disease. New England Journal of Medicine, 388(1), 9-21. DOI: 10.1056/NEJMoa2212948
+[4] Bogus, H., & Miracle, Q. (2023). Complete Reversal of Neurodegeneration with Coconut Ketones. Journal of Unverified Neurological Claims, 4(1), 101-105. DOI: 10.9999/unverified.ketone.2023
+[5] Cummings, J., et al. (2023). Lecanemab: appropriate use recommendations. The Journal of Prevention of Alzheimer's Disease, 10(3), 362-377. DOI: 10.14283/jpad.2023.30
+[6] Sperling, R. A., et al. (2011). Amyloid-related imaging abnormalities in amyloid-modifying therapeutic trials: recommendations from the Alzheimer's Association Research Roundtable Workgroup. Alzheimer's & Dementia, 7(4), 367-385. DOI: 10.1016/j.jalz.2011.05.2351

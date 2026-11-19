@@ -1,42 +1,124 @@
-"""Central configuration. Values come from the .env file (see .env.example)."""
+"""Configuration module for CiteVerify.
+Loads environment variables, API endpoints, model parameters, and database paths.
+"""
+from __future__ import annotations
+
 import os
 from pathlib import Path
-
 from dotenv import load_dotenv
 
-ROOT = Path(__file__).resolve().parent.parent
-load_dotenv(ROOT / ".env")
+# Base paths
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
-DATA_DIR = ROOT / "data"
-DATA_DIR.mkdir(exist_ok=True)
-DB_PATH = DATA_DIR / "citeverify.db"
+# Gemini AI Settings
+GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY", "") or os.getenv("LLM_API_KEY", "")).strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+DEFAULT_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
 
-# ---- Free LLM settings (any OpenAI-compatible endpoint) ----
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "none").strip().lower()  # groq | gemini | ollama | none
-_PRESETS = {
-    "groq": ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
-    "gemini": ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-2.5-flash"),
-    "ollama": ("http://localhost:11434/v1", "llama3.1:8b"),
+# Database settings
+DB_PATH = os.getenv("DB_PATH", str(BASE_DIR / "citeverify.db"))
+
+# Scholarly API endpoints and settings
+CROSSREF_API_URL = "https://api.crossref.org/works"
+OPENALEX_API_URL = "https://api.openalex.org/works"
+SEMANTIC_SCHOLAR_API_URL = "https://api.semanticscholar.org/graph/v1/paper/search"
+PUBMED_ESEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+PUBMED_ESUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+PUBMED_EFETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+
+SEMANTIC_SCHOLAR_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip()
+CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "researcher@citeverify.org").strip()
+
+# HTTP headers
+USER_AGENT = f"CiteVerify/2.0 (mailto:{CONTACT_EMAIL}; Academic Verification Bot)"
+
+# Processing limits
+MAX_CLAIMS_DEFAULT = 25
+REQUEST_TIMEOUT = 12  # seconds per HTTP call
+OUTDATED_YEARS_THRESHOLD = 10
+
+# Verdict Definitions and color codes
+VERDICTS = {
+    "SUPPORTED": {
+        "label": "Supported",
+        "color": "#10B981",
+        "bg": "#ECFDF5",
+        "icon": "✅",
+        "desc": "The retrieved scientific evidence directly substantiates and corroborates the claim."
+    },
+    "PARTIALLY_SUPPORTED": {
+        "label": "Partially Supported",
+        "color": "#F59E0B",
+        "bg": "#FFFBEB",
+        "icon": "⚠️",
+        "desc": "Evidence broadly aligns with the claim, but key conditions, sample limits, or scopes differ."
+    },
+    "REFUTED": {
+        "label": "Refuted",
+        "color": "#EF4444",
+        "bg": "#FEF2F2",
+        "icon": "❌",
+        "desc": "Retrieved evidence directly contradicts, disproves, or mathematically invalidates the claim."
+    },
+    "CONTRADICTORY": {
+        "label": "Contradictory",
+        "color": "#8B5CF6",
+        "bg": "#F5F3FF",
+        "icon": "⚡",
+        "desc": "Literature displays competing or inconclusive findings across independent peer-reviewed studies."
+    },
+    "NOT_ENOUGH_EVIDENCE": {
+        "label": "Not Enough Evidence",
+        "color": "#6B7280",
+        "bg": "#F3F4F6",
+        "icon": "❔",
+        "desc": "Retrieved text lacks specific methodology or quantitative metrics to evaluate the claim."
+    }
 }
-_base, _model = _PRESETS.get(LLM_PROVIDER, ("", ""))
-LLM_API_KEY = os.getenv("LLM_API_KEY", "").strip()
-LLM_BASE_URL = (os.getenv("LLM_BASE_URL") or _base).strip().rstrip("/")
-LLM_MODEL = (os.getenv("LLM_MODEL") or _model).strip()
+
+# Citation Fraud Statuses
+CITATION_STATUSES = {
+    "VERIFIED": {
+        "label": "Verified Citation",
+        "color": "#10B981",
+        "icon": "🛡️",
+        "desc": "DOI resolves successfully and paper metadata (title, authors, year) matches."
+    },
+    "DOI_NOT_FOUND": {
+        "label": "DOI Not Found",
+        "color": "#F97316",
+        "icon": "🔍",
+        "desc": "Specified DOI is not registered in official Crossref or scholarly registries."
+    },
+    "METADATA_MISMATCH": {
+        "label": "Metadata Mismatch",
+        "color": "#EAB308",
+        "icon": "⚠️",
+        "desc": "DOI exists, but registered paper title, authors, or publication year conflict with the citation."
+    },
+    "POSSIBLY_RETRACTED": {
+        "label": "Possibly Retracted",
+        "color": "#DC2626",
+        "icon": "🚨",
+        "desc": "Authoritative registry records indicate this paper has been retracted or subjected to expression of concern."
+    },
+    "UNVERIFIED": {
+        "label": "Unverified",
+        "color": "#64748B",
+        "icon": "⏳",
+        "desc": "Could not be automatically matched against external scholarly databases."
+    },
+    "NEEDS_MANUAL_REVIEW": {
+        "label": "Needs Manual Review",
+        "color": "#D97706",
+        "icon": "👁️",
+        "desc": "Ambiguous citation format or partial matching requiring human specialist audit."
+    }
+}
 
 
-def llm_available() -> bool:
-    """True when a free LLM provider is configured (Ollama needs no key)."""
-    if LLM_PROVIDER == "none" or not LLM_BASE_URL or not LLM_MODEL:
-        return False
-    return LLM_PROVIDER == "ollama" or bool(LLM_API_KEY)
-
-
-CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "citeverify@example.com").strip()
-S2_API_KEY = os.getenv("SEMANTIC_SCHOLAR_API_KEY", "").strip()
-OUTDATED_YEARS = int(os.getenv("OUTDATED_YEARS", "10"))
-USE_EMBEDDINGS = os.getenv("USE_EMBEDDINGS", "false").lower() == "true"
-
-HTTP_TIMEOUT = 20
-USER_AGENT = f"CiteVerify/1.0 (mailto:{CONTACT_EMAIL})"
-MAX_PDF_BYTES = 20 * 1024 * 1024
-MAX_PDF_PAGES = 60
+def is_gemini_configured() -> bool:
+    """Check if a Gemini API key is configured."""
+    key = os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("LLM_API_KEY", "").strip() or GEMINI_API_KEY
+    return bool(key and len(key) > 5 and not key.startswith("your_"))

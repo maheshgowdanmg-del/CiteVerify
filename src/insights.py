@@ -13,7 +13,7 @@ import textwrap
 from datetime import date
 from difflib import SequenceMatcher
 
-OFFICIAL_LABELS = ["Supported", "Partially Supported", "Unsupported", "Contradictory", "Needs Review"]
+OFFICIAL_LABELS = ["Supported", "Partially Supported", "Unsupported", "Contradictory", "Possibly Outdated", "Needs Review"]
 VERDICT_COLORS = {"supported": "#16a34a", "partial": "#f59e0b", "outdated": "#0ea5e9", "unsupported": "#dc2626",
                   "contradictory": "#7c3aed"}
 GREY = "#6b7280"
@@ -42,9 +42,10 @@ def classify_status(key) -> str:
 
 
 def official_label(key) -> str:
-    """The five labels required by the problem statement. Everything not decisive is 'Needs Review'."""
+    """The verdict labels named in the problem statement (supported, partly supported, unsupported, contradictory,
+    possibly outdated). Everything not decisive (cannot verify, missing/bad reference) is 'Needs Review'."""
     return {"supported": "Supported", "partial": "Partially Supported", "unsupported": "Unsupported",
-            "contradictory": "Contradictory"}.get(classify_status(key), "Needs Review")
+            "contradictory": "Contradictory", "outdated": "Possibly Outdated"}.get(classify_status(key), "Needs Review")
 
 
 def official_distribution(results) -> dict:
