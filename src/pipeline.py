@@ -107,15 +107,25 @@ def run_full_verification_pipeline(
         )
 
         # Assemble finding result
+        norm_verdict = config.normalize_verdict(verdict_data.get("verdict", "NEEDS_REVIEW"))
         result_entry = {
             "claim_id": claim.get("claim_id", f"C{idx}"),
-            "verdict": verdict_data.get("verdict", "NOT_ENOUGH_EVIDENCE"),
-            "final_verdict": verdict_data.get("verdict", "NOT_ENOUGH_EVIDENCE"),
+            "verdict": norm_verdict,
+            "final_verdict": norm_verdict,
             "explanation": verdict_data.get("explanation", ""),
             "confidence_score": verdict_data.get("confidence_score", 0.75),
             "confidence_label": verdict_data.get("confidence_label", "Medium"),
             "limitations": verdict_data.get("limitations", ""),
-            "needs_review": False,
+            "needs_review": norm_verdict == "NEEDS_REVIEW",
+            "provider_used": verdict_data.get("provider_used", "ai"),
+            "explainability": verdict_data.get("explainability") or {
+                "what_was_claimed": claim.get("claim", ""),
+                "what_source_reported": verdict_data.get("explanation", ""),
+                "what_matched": "Empirical subject matter",
+                "what_did_not_match": "None",
+                "why_assigned": verdict_data.get("explanation", ""),
+                "what_remains_uncertain": verdict_data.get("limitations", "No bounds noted")
+            },
             "evidence": {
                 "passage": evidence.get("passage", ""),
                 "quote": verdict_data.get("evidence_quote") or evidence.get("passage", "")[:250],
@@ -133,8 +143,8 @@ def run_full_verification_pipeline(
             "source_url": retrieved_paper.get("url", ""),
             "source_access": "open_access" if retrieved_paper.get("is_oa") else "abstract",
             "contradiction_notes": contradiction_data.get("summary", ""),
-            "review_action": "AI Verified (Autonomous)",
-            "review_comment": "Fully substantiated by autonomous AI evidence verification."
+            "review_action": "AI Verified",
+            "review_comment": "Automated verification complete."
         }
         results_list.append(result_entry)
 

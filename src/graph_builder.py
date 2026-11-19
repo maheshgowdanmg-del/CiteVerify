@@ -92,14 +92,17 @@ def build_citation_trust_graph(
         # Red: Refuted / Contradictory
         # Orange: Partially supported / Mismatched
         # Yellow: Insufficient evidence
-        if v == "SUPPORTED":
-            color = "#10B981"  # GREEN
-        elif v in ("REFUTED", "CONTRADICTORY"):
-            color = "#EF4444"  # RED
-        elif v == "PARTIALLY_SUPPORTED":
-            color = "#F59E0B"  # AMBER/ORANGE
+        norm_v = config.normalize_verdict(v)
+        if norm_v == "SUPPORTED":
+            color = "#14B8A6"  # TEAL (Supporting evidence)
+        elif norm_v in ("UNSUPPORTED", "REFUTED"):
+            color = "#E11D48"  # DEEP RED (Unsupported / Disproven)
+        elif norm_v == "CONTRADICTORY":
+            color = "#8B5CF6"  # PURPLE (Contradictory findings)
+        elif norm_v == "PARTIALLY_SUPPORTED":
+            color = "#D6B56D"  # GOLD (Partially supported)
         else:
-            color = "#EAB308"  # YELLOW
+            color = "#64748B"  # MUTED GREY (Needs review / Insufficient evidence)
 
         claim_text = cl.get("claim_text") or cl.get("claim", "")
         ev_snippet = (res.get("evidence_quote") or "None indexed")[:140]

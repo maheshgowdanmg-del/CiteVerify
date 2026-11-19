@@ -160,6 +160,9 @@ def verify_citation_fraud(citation: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+verify_single_citation = verify_citation_fraud
+
+
 def batch_verify_citations(citations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Verify an entire list of citations with the Citation Fraud Engine."""
     verified_list = []

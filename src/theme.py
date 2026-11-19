@@ -15,18 +15,19 @@ CSS_STYLES = """
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 :root {
-    --bg-main: #F8FAFC;
+    --bg-main: #F7F9FC;
     --card-bg: #FFFFFF;
-    --sidebar-bg: #0F172A;
-    --sidebar-card: #1E293B;
+    --sidebar-bg: #0B1220;
+    --sidebar-card: #152033;
     --border-color: #E2E8F0;
-    --accent-blue: #2563EB;
-    --accent-light: #38BDF8;
-    --text-primary: #0F172A;
+    --accent-blue: #14B8A6;
+    --accent-light: #2DD4BF;
+    --accent-gold: #D6B56D;
+    --text-primary: #0B1220;
     --text-muted: #64748B;
-    --success: #10B981;
-    --warning: #F59E0B;
-    --danger: #EF4444;
+    --success: #14B8A6;
+    --warning: #D6B56D;
+    --danger: #E11D48;
 }
 
 /* Global Font & App Container */

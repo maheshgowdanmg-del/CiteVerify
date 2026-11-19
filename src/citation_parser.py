@@ -12,6 +12,8 @@ from .utils import clean_doi
 # Regex patterns for in-text citations
 IN_TEXT_NUMERIC_REGEX = re.compile(r"\[(\d+(?:\s*[-–,;\s]\s*\d+)*)\]")
 IN_TEXT_AUTHOR_YEAR_REGEX = re.compile(r"\(([A-Z][a-zA-Z\s]+(?:et\s+al\.?)?,\s*(?:19|20)\d{2}(?:[a-z])?(?:;\s*[A-Z][a-zA-Z\s]+(?:et\s+al\.?)?,\s*(?:19|20)\d{2}(?:[a-z])?)*)\)")
+IN_TEXT_CITATION_REGEX = re.compile(r"\[\d+(?:\s*[-–,;\s]\s*\d+)*\]|\([A-Z][a-zA-Z\s]+(?:et\s+al\.?)?,\s*(?:19|20)\d{2}[a-z]?(?:;\s*[A-Z][a-zA-Z\s]+(?:et\s+al\.?)?,\s*(?:19|20)\d{2}[a-z]?)*\)")
+
 
 
 def extract_in_text_citations(text: str) -> List[Dict[str, Any]]:

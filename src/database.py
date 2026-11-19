@@ -285,6 +285,9 @@ def add_human_review(
     conn.close()
 
 
+save_human_review = add_human_review
+
+
 def get_latest_reviews(doc_id: str, db_path: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     """Get the latest review decision for each claim in a document."""
     conn = get_connection(db_path)
