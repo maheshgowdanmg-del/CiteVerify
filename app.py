@@ -3,21 +3,24 @@ import html
 import re
 from pathlib import Path
 
-import pandas as pd
-import streamlit as stgit --version
+import os
 
-from src import config, report, storage
+import pandas as pd
+import streamlit as st
+
+from src import config, report, storage, theme, ui_extras
 from src.extract import extract_text
 from src.pipeline import run_pipeline
 from src.verdict import STATUS
 
 st.set_page_config(page_title="CiteVerify", page_icon="🔎", layout="wide")
+theme.inject(st)
 SAMPLE = Path(__file__).parent / "data" / "sample" / "sample_paper.txt"
 
 
 def badge(status):
     name, color = STATUS.get(status, (status, "#555"))
-    return f"<span style='background:{color};color:#fff;padding:2px 10px;border-radius:12px;font-size:0.85em'>{name}</span>"
+    return theme.pill(name, color)
 
 
 def highlight(passage, quote):
@@ -48,7 +51,11 @@ with st.sidebar:
     st.divider()
     st.caption("⚠️ Automated findings are decision support, not final academic judgments. Every result is open to human review.")
 
-st.header("CiteVerify - does the cited paper really support the claim?")
+st.markdown(theme.hero(
+    "CiteVerify", "Scientific Intelligence. Academic Integrity.",
+    "Verify scientific claims. Validate citations. Build trustworthy research - by checking whether the original paper really supports each statement.",
+    [("1", "Extract claims"), ("2", "Map citations"), ("3", "Retrieve originals"), ("4", "Compare evidence"), ("5", "Verdict + report")]),
+    unsafe_allow_html=True)
 
 # ---------------- upload ----------------
 c1, c2 = st.columns([3, 1])
@@ -73,6 +80,7 @@ if text:
 
 run = st.session_state.get("run")
 if not run:
+    st.markdown(theme.welcome_steps(), unsafe_allow_html=True)
     st.info("Upload a document (or click **Use sample document**) and press **Verify claims**.")
     st.stop()
 
@@ -80,19 +88,15 @@ reviews = storage.get_reviews(run["run_id"])
 results = report.apply_reviews(run["results"], reviews)
 s = run["summary"]
 
-tabs = st.tabs(["📊 Overview", "🧾 Claim-by-claim", "⚠️ Needs human review", "📚 References", "🕘 Review history", "⬇️ Export"])
+t_over, t_claims, t_review, t_insights, t_reco, t_refs, t_hist, t_export = st.tabs(
+    ["📊 Overview", "🧾 Claim-by-claim", "⚠️ Needs human review", "🛡️ Insights", "💡 Source recommender", "📚 References", "🕘 Review history", "⬇️ Export"])
 
 # ---------------- overview ----------------
-with tabs[0]:
-    m = st.columns(5)
-    m[0].metric("Findings", s["total_findings"])
-    m[1].metric("Needs review", s["needs_review"])
-    m[2].metric("Avg confidence", s["avg_confidence"] if s["avg_confidence"] is not None else "n/a")
-    m[3].metric("References resolved", f"{s['references_resolved']}/{s['references_total']}")
-    m[4].metric("Mode", config.LLM_PROVIDER.title() if run["used_llm"] and config.llm_available() else "Rules")
-    df = pd.DataFrame({"status": [STATUS.get(k, (k,))[0] for k in s["by_status"]], "count": list(s["by_status"].values())}).set_index("status")
-    st.bar_chart(df)
-    st.caption(f"Source access: {s['source_access']}  |  full text = best evidence; abstract-only results are flagged and get lower confidence.")
+with t_over:
+    theme.render_overview(
+        st, run, results, s, n_documents=len(runs),
+        mode=config.LLM_PROVIDER.title() if run["used_llm"] and config.llm_available() else "Rules (offline)",
+        outdated_years=int(getattr(config, "OUTDATED_YEARS", 10) or 10))
 
 
 def render(r, key_prefix):
@@ -128,7 +132,7 @@ def render(r, key_prefix):
         st.caption(f"Current decision: {r['review_decision']}")
 
 
-with tabs[1]:
+with t_claims:
     only = st.multiselect("Filter by status", list(STATUS), format_func=lambda k: STATUS[k][0])
     for r in results:
         if only and r["final_status"] not in only:
@@ -136,14 +140,24 @@ with tabs[1]:
         with st.expander(f"{r['claim_id']} - {STATUS.get(r['final_status'], (r['final_status'],))[0]} - {r['claim'][:90]}..."):
             render(r, "all")
 
-with tabs[2]:
+with t_review:
     todo = [r for r in results if r["needs_review"] and r["review_decision"] == "pending"]
     st.write(f"{len(todo)} items waiting for a human decision.")
     for r in todo:
         with st.expander(f"{r['claim_id']} - {STATUS.get(r['final_status'], (r['final_status'],))[0]} - {r['claim'][:90]}..."):
             render(r, "todo")
 
-with tabs[3]:
+with t_insights:
+    ui_extras.render_insights(st, run, results, outdated_years=int(getattr(config, "OUTDATED_YEARS", 10) or 10))
+
+with t_reco:
+    ui_extras.render_recommender(
+        st, run, results, STATUS,
+        contact_email=getattr(config, "CONTACT_EMAIL", None) or os.getenv("CONTACT_EMAIL"),
+        s2_api_key=getattr(config, "SEMANTIC_SCHOLAR_API_KEY", None) or os.getenv("SEMANTIC_SCHOLAR_API_KEY"),
+        outdated_years=int(getattr(config, "OUTDATED_YEARS", 10) or 10))
+
+with t_refs:
     rows = []
     for ref in run["references"]:
         src = run["sources"].get(str(ref["id"]), {})
@@ -151,10 +165,10 @@ with tabs[3]:
                      "year": src.get("year"), "access": src.get("access"), "retracted": src.get("retracted"), "doi": src.get("doi"), "via": ", ".join(src.get("providers", []))})
     st.dataframe(pd.DataFrame(rows), use_container_width=True)
 
-with tabs[4]:
+with t_hist:
     st.dataframe(pd.DataFrame(reviews) if reviews else pd.DataFrame(columns=["result_id", "action", "new_status", "comment", "ts"]), use_container_width=True)
 
-with tabs[5]:
+with t_export:
     st.download_button("⬇️ PDF report", report.to_pdf(run, reviews), f"citeverify_{run['run_id']}.pdf", "application/pdf")
     st.download_button("⬇️ HTML report", report.to_html(run, reviews), f"citeverify_{run['run_id']}.html", "text/html")
     st.download_button("⬇️ JSON (full data + audit trail)", report.to_json(run, reviews), f"citeverify_{run['run_id']}.json", "application/json")
