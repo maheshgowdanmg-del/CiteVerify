@@ -1,5 +1,7 @@
 # 🔎 CiteVerify AI – Scientific Claim & Citation Verification System
 
+[![Live App on Render](https://img.shields.io/badge/Live%20Demo-citeverify--h7lq.onrender.com-46E3B7.svg?style=for-the-badge&logo=render&logoColor=white)](https://citeverify-h7lq.onrender.com)
+
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/maheshgowdanmg-del/CiteVerify)
 [![Deploy with Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=maheshgowdanmg-del/CiteVerify&branch=main&mainModule=app.py)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
