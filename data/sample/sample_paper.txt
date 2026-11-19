@@ -1,0 +1,17 @@
+A Short Survey of Deep Learning Foundations (sample document with planted errors)
+
+1. Introduction
+
+The Transformer architecture achieved 28.4 BLEU on the WMT 2014 English-to-German translation task [1]. The Transformer reached 45.0 BLEU on the WMT 2014 English-to-German task, far above all earlier systems [1]. Deep residual networks with 152 layers won the ILSVRC 2015 classification task [2]. Adam was shown to reduce training time by 90% on all neural network architectures [3].
+
+2. Health and Society
+
+The MMR vaccine causes autism in children [4]. Quantum gravity fields improve crop yields by 40% in arid regions [5]. Studies show that 75% of all machine learning projects fail because of poor data quality.
+
+References
+
+[1] Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L., & Polosukhin, I. (2017). Attention is all you need. Advances in Neural Information Processing Systems 30. arXiv:1706.03762
+[2] He, K., Zhang, X., Ren, S., & Sun, J. (2016). Deep residual learning for image recognition. In Proceedings of CVPR (pp. 770-778). https://doi.org/10.1109/CVPR.2016.90
+[3] Kingma, D. P., & Ba, J. (2014). Adam: A method for stochastic optimization. arXiv:1412.6980
+[4] Wakefield, A. J., et al. (1998). Ileal-lymphoid-nodular hyperplasia, non-specific colitis, and pervasive developmental disorder in children. The Lancet, 351, 637-641.
+[5] Smith, J., & Doe, R. (2021). Quantum gravity fields and arid crop yield enhancement. Journal of Imaginary Results, 12(3), 45-60.

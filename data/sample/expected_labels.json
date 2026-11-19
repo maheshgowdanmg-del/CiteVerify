@@ -1,0 +1,9 @@
+[
+  {"claim_contains": "28.4 BLEU", "acceptable": ["supported", "possibly_outdated"]},
+  {"claim_contains": "45.0 BLEU", "acceptable": ["partly_supported", "unsupported", "contradictory"]},
+  {"claim_contains": "152 layers", "acceptable": ["supported", "possibly_outdated"]},
+  {"claim_contains": "reduce training time by 90%", "acceptable": ["partly_supported", "unsupported", "contradictory"]},
+  {"claim_contains": "causes autism", "acceptable": ["unsupported", "contradictory", "bad_reference", "cannot_verify"]},
+  {"claim_contains": "crop yields by 40%", "acceptable": ["bad_reference"]},
+  {"claim_contains": "75% of all machine learning", "acceptable": ["missing_citation"]}
+]
