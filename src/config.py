@@ -11,10 +11,23 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
+# Helper to read from environment or Streamlit Cloud st.secrets
+def get_secret(key: str, default: str = "") -> str:
+    val = os.getenv(key, "")
+    if val:
+        return val.strip()
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and key in st.secrets:
+            return str(st.secrets[key]).strip()
+    except Exception:
+        pass
+    return default
+
 # Gemini AI Settings
-GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY", "") or os.getenv("LLM_API_KEY", "")).strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
-DEFAULT_TEMPERATURE = float(os.getenv("GEMINI_TEMPERATURE", "0.2"))
+GEMINI_API_KEY = (get_secret("GEMINI_API_KEY") or get_secret("LLM_API_KEY")).strip()
+GEMINI_MODEL = get_secret("GEMINI_MODEL", "gemini-2.5-flash").strip()
+DEFAULT_TEMPERATURE = float(get_secret("GEMINI_TEMPERATURE", "0.2"))
 
 # Database settings
 DB_PATH = os.getenv("DB_PATH", str(BASE_DIR / "citeverify.db"))
@@ -120,5 +133,5 @@ CITATION_STATUSES = {
 
 def is_gemini_configured() -> bool:
     """Check if a Gemini API key is configured."""
-    key = os.getenv("GEMINI_API_KEY", "").strip() or os.getenv("LLM_API_KEY", "").strip() or GEMINI_API_KEY
+    key = get_secret("GEMINI_API_KEY") or get_secret("LLM_API_KEY") or GEMINI_API_KEY
     return bool(key and len(key) > 5 and not key.startswith("your_"))
