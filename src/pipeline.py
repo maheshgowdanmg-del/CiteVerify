@@ -13,6 +13,7 @@ from . import (
     citation_checker,
     citation_parser,
     claim_extractor,
+    config,
     contradiction_detector,
     database,
     evidence_matcher,
