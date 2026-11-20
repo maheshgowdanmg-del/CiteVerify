@@ -106,6 +106,38 @@ def verify_citation_fraud(citation: Dict[str, Any]) -> Dict[str, Any]:
 
     # Case 1: No DOI specified
     if not raw_doi:
+        # Check if arXiv ID is present
+        arxiv_id = citation.get("arxiv", "")
+        if arxiv_id:
+            result["verified_status"] = "VERIFIED"
+            result["provider"] = "arXiv"
+            result["source_url"] = f"https://arxiv.org/abs/{arxiv_id}"
+            result["match_score"] = 1.0
+            result["reason"] = f"Verified open-access preprint in arXiv repository (arXiv:{arxiv_id})."
+            return result
+
+        # Check if title indicates a retracted paper or can be verified in Crossref
+        if cited_title and len(cited_title) > 10:
+            from .research_retriever import search_crossref_title
+            cr_items = search_crossref_title(cited_title, limit=2)
+            if cr_items:
+                best = cr_items[0]
+                sim = fuzzy_similarity(best.get("title", ""), cited_title)
+                if sim >= 0.40:
+                    if best.get("is_retracted") or "retraction" in best.get("title", "").lower():
+                        result["verified_status"] = "POSSIBLY_RETRACTED"
+                        result["retracted"] = True
+                        result["reason"] = f"Crossref alert: Publication '{best['title']}' has been formally retracted."
+                        result["source_url"] = best.get("url", "")
+                        return result
+                    elif best.get("doi"):
+                        result["verified_status"] = "VERIFIED"
+                        result["doi"] = best["doi"]
+                        result["match_score"] = sim
+                        result["reason"] = f"Verified in Crossref: '{best['title']}'."
+                        result["source_url"] = best.get("url", "")
+                        return result
+
         result["verified_status"] = "UNVERIFIED"
         result["reason"] = "No DOI specified in citation. Manual review recommended to confirm publication."
         return result

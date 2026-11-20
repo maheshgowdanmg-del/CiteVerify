@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 import json
 import urllib.parse
+import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -16,6 +17,57 @@ from .utils import clean_doi, fuzzy_similarity
 
 # In-memory search cache to respect API rate limits
 _RETRIEVAL_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def retrieve_paper_from_arxiv(arxiv_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieve full metadata and abstract for an arXiv paper via the open arXiv export API."""
+    clean_id = re.sub(r"^arxiv:\s*", "", arxiv_id.strip(), flags=re.I).strip()
+    if not clean_id:
+        return None
+
+    cache_key = f"arxiv_{clean_id}"
+    if cache_key in _RETRIEVAL_CACHE:
+        return _RETRIEVAL_CACHE[cache_key]
+
+    url = f"http://export.arxiv.org/api/query?id_list={urllib.parse.quote(clean_id)}"
+    try:
+        resp = requests.get(url, timeout=config.REQUEST_TIMEOUT)
+        if resp.status_code == 200:
+            root = ET.fromstring(resp.text)
+            ns = {"atom": "http://www.w3.org/2005/Atom"}
+            entry = root.find("atom:entry", ns)
+            if entry is not None:
+                title_elem = entry.find("atom:title", ns)
+                summary_elem = entry.find("atom:summary", ns)
+                title = title_elem.text.strip().replace("\n", " ") if title_elem is not None and title_elem.text else ""
+                abstract = summary_elem.text.strip().replace("\n", " ") if summary_elem is not None and summary_elem.text else ""
+                authors = [
+                    a.find("atom:name", ns).text.strip()
+                    for a in entry.findall("atom:author", ns)
+                    if a.find("atom:name", ns) is not None and a.find("atom:name", ns).text
+                ]
+                published_elem = entry.find("atom:published", ns)
+                year = int(published_elem.text[:4]) if published_elem is not None and published_elem.text and len(published_elem.text) >= 4 else None
+
+                result = {
+                    "title": title,
+                    "authors": authors[:6],
+                    "year": year,
+                    "journal": f"arXiv:{clean_id}",
+                    "doi": f"10.48550/arXiv.{clean_id}",
+                    "url": f"https://arxiv.org/abs/{clean_id}",
+                    "abstract": abstract,
+                    "is_oa": True,
+                    "oa_url": f"https://arxiv.org/pdf/{clean_id}.pdf",
+                    "is_retracted": False,
+                    "provider": "arXiv"
+                }
+                _RETRIEVAL_CACHE[cache_key] = result
+                return result
+    except Exception:
+        pass
+
+    return None
 
 
 def retrieve_paper_by_doi(doi: str) -> Optional[Dict[str, Any]]:
@@ -163,6 +215,60 @@ def search_openalex(query: str, limit: int = 3) -> List[Dict[str, Any]]:
     return results
 
 
+def search_crossref_title(query: str, limit: int = 3) -> List[Dict[str, Any]]:
+    """Search Crossref REST API by title query as a reliable fallback."""
+    if not query or len(query.strip()) < 5:
+        return []
+
+    cache_key = f"cr_q_{query[:60]}"
+    if cache_key in _RETRIEVAL_CACHE:
+        return _RETRIEVAL_CACHE[cache_key]
+
+    url = f"{config.CROSSREF_API_URL}?query.title={urllib.parse.quote(query)}&rows={limit}"
+    headers = {"User-Agent": config.USER_AGENT}
+    results = []
+    try:
+        resp = requests.get(url, headers=headers, timeout=config.REQUEST_TIMEOUT)
+        if resp.status_code == 200:
+            items = resp.json().get("message", {}).get("items", [])
+            for msg in items:
+                titles = msg.get("title") or []
+                t = titles[0] if titles else ""
+                clean = msg.get("DOI", "")
+                authors = []
+                for a in msg.get("author") or []:
+                    name = f"{a.get('given', '')} {a.get('family', '')}".strip()
+                    if name:
+                        authors.append(name)
+                year = None
+                date_parts = (msg.get("published-print") or msg.get("published-online") or msg.get("created", {})).get("date-parts", [])
+                if date_parts and date_parts[0]:
+                    year = date_parts[0][0]
+                is_retracted = bool(msg.get("update-to") or "retraction" in t.lower())
+                abstract = msg.get("abstract", "")
+                abstract = re.sub(r"<[^>]+>", " ", abstract).strip()
+                if is_retracted and not abstract:
+                    abstract = f"RETRACTED PUBLICATION: This paper '{t}' was formally retracted in scholarly registry records."
+                results.append({
+                    "title": t,
+                    "authors": authors[:6],
+                    "year": year,
+                    "journal": (msg.get("container-title") or [""])[0],
+                    "doi": clean,
+                    "url": msg.get("URL") or (f"https://doi.org/{clean}" if clean else ""),
+                    "abstract": abstract or f"Publication registered in Crossref: '{t}'.",
+                    "is_oa": False,
+                    "oa_url": "",
+                    "is_retracted": is_retracted,
+                    "provider": "Crossref"
+                })
+    except Exception:
+        pass
+
+    _RETRIEVAL_CACHE[cache_key] = results
+    return results
+
+
 def search_pubmed(query: str, limit: int = 2) -> List[Dict[str, Any]]:
     """Search PubMed via NCBI E-utilities for biomedical claims."""
     if not query:
@@ -223,22 +329,33 @@ def retrieve_research_for_claim(
 ) -> Dict[str, Any]:
     """Retrieve the most relevant academic research paper and candidate evidence for a claim."""
     target_doi = ""
+    target_arxiv = ""
     query = ""
 
     if resolved_ref:
         target_doi = resolved_ref.get("doi", "")
+        target_arxiv = resolved_ref.get("arxiv", "")
         query = resolved_ref.get("title", "")
+        if not target_arxiv:
+            raw_text = resolved_ref.get("raw_text", "")
+            ax_m = re.search(r"arXiv:\s*(\d{4}\.\d{4,5}(?:v\d+)?)", raw_text, re.I)
+            if ax_m:
+                target_arxiv = ax_m.group(1)
 
     if not query:
         query = claim.get("claim", "")[:120]
 
     paper_record = None
 
-    # 1. Direct DOI retrieval if available
-    if target_doi:
+    # 1. Direct arXiv retrieval if arXiv ID is specified
+    if target_arxiv:
+        paper_record = retrieve_paper_from_arxiv(target_arxiv)
+
+    # 2. Direct DOI retrieval if available
+    if not paper_record and target_doi and target_doi.startswith("10."):
         paper_record = retrieve_paper_by_doi(target_doi)
 
-    # 2. OpenAlex search if DOI was missing or abstract was empty
+    # 3. OpenAlex search if DOI was missing or abstract was empty
     if not paper_record or not paper_record.get("abstract") or len(paper_record.get("abstract", "")) < 30:
         candidates = search_openalex(query, limit=3)
         if candidates:
@@ -247,7 +364,15 @@ def retrieve_research_for_claim(
             if not paper_record or (best.get("abstract") and len(best.get("abstract", "")) > len(paper_record.get("abstract", ""))):
                 paper_record = best
 
-    # 3. If biomedical and still lacking abstract, try PubMed
+    # 4. Crossref title search if OpenAlex was empty or ratelimited
+    if not paper_record or not paper_record.get("abstract") or len(paper_record.get("abstract", "")) < 30:
+        cr_candidates = search_crossref_title(query, limit=3)
+        if cr_candidates:
+            best_cr = max(cr_candidates, key=lambda c: fuzzy_similarity(c.get("title", ""), query))
+            if fuzzy_similarity(best_cr.get("title", ""), query) >= 0.40:
+                paper_record = best_cr
+
+    # 5. If biomedical and still lacking abstract, try PubMed
     if not paper_record and any(kw in query.lower() for kw in ("cancer", "patient", "clinical", "disease", "treatment")):
         pm_candidates = search_pubmed(query, limit=2)
         if pm_candidates:

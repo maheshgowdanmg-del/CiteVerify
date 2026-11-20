@@ -116,7 +116,7 @@ def verify_numerical_claims(claim_text: str, evidence_text: str) -> Dict[str, An
                     "value": c_val
                 })
                 break
-            elif c_type == e_type and c_type in ("percentage", "statistical"):
+            elif (c_num.get("unit") and c_num.get("unit") == e_num.get("unit")) or (c_type == e_type and c_type in ("percentage", "statistical", "measurement", "decimal_metric")) or (c_type in ("measurement", "decimal_metric") and e_type in ("measurement", "decimal_metric")):
                 potential_conflict = e_num
 
         if not found_exact:

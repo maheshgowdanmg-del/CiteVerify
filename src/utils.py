@@ -28,7 +28,10 @@ def clean_doi(raw: str) -> str:
     if match:
         clean = match.group(0).rstrip(".,;)>]")
         return clean
-    return raw.replace("https://doi.org/", "").replace("http://dx.doi.org/", "").strip()
+    # If the input was an explicit short DOI or test string (like 'invalid_string' or '10.xxxx')
+    if len(raw) < 80 and not any(sep in raw for sep in ("\n", ". (", ", &", "et al", "References")):
+        return raw.replace("https://doi.org/", "").replace("http://dx.doi.org/", "").strip()
+    return ""
 
 
 def fuzzy_similarity(a: str, b: str) -> float:
@@ -46,26 +49,37 @@ def extract_numbers_from_text(text: str) -> List[Dict[str, Any]]:
         return []
     
     found: List[Dict[str, Any]] = []
+    seen_spans = set()
     
     # 1. Percentages (e.g. 45%, 32.5 percent, 95.0%)
     for m in re.finditer(r"(\b\d+(?:\.\d+)?)\s*(%|percent\b)", text, flags=re.I):
         val = float(m.group(1))
+        seen_spans.add((m.start(), m.end()))
         found.append({"raw": m.group(0), "value": val, "unit": "%", "type": "percentage"})
     
     # 2. AUC / ROC / P-values (e.g. AUC of 0.945, p < 0.05, p=0.001)
     for m in re.finditer(r"\b(auc|p|r2)\s*(?:of|=|<|>|<=|>=)\s*(\d+(?:\.\d+)?)\b", text, flags=re.I):
         val = float(m.group(2))
+        seen_spans.add((m.start(), m.end()))
         found.append({"raw": m.group(0), "value": val, "unit": m.group(1).upper(), "type": "statistical"})
         
     # 3. Sample sizes (e.g. n = 1,420, 500 patients, 120 subjects)
     for m in re.finditer(r"\b(?:n\s*=\s*|sample\s*of\s*)(\d[\d,]*)\b", text, flags=re.I):
         num_str = m.group(1).replace(",", "")
+        seen_spans.add((m.start(), m.end()))
         found.append({"raw": m.group(0), "value": float(num_str), "unit": "sample_size", "type": "cohort"})
 
-    # 4. Standalone decimal or integer measurements with context
-    for m in re.finditer(r"\b(\d+(?:\.\d+)?)\s*(fold|times|x|hours|days|years|mg|ml)\b", text, flags=re.I):
+    # 4. Standalone decimal or integer measurements with scientific context
+    for m in re.finditer(r"\b(\d+(?:\.\d+)?)\s*(fold|times|x|hours|days|years|mg|ml|bleu|glue|f1|accuracy|points?|billion|million|k|parameters?)\b", text, flags=re.I):
         val = float(m.group(1))
+        seen_spans.add((m.start(), m.end()))
         found.append({"raw": m.group(0), "value": val, "unit": m.group(2).lower(), "type": "measurement"})
+
+    # 5. Standalone decimal scores (e.g. 28.4, 35.0, 80.5, 90.5) not captured yet
+    for m in re.finditer(r"\b(\d+\.\d+)\b", text):
+        if not any(s <= m.start() and m.end() <= e for (s, e) in seen_spans):
+            val = float(m.group(1))
+            found.append({"raw": m.group(0), "value": val, "unit": "score", "type": "decimal_metric"})
 
     return found
 

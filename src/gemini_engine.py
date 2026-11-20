@@ -197,29 +197,74 @@ def run_offline_verification(
         best_quote = max(evidence_sentences, key=lambda s: fuzzy_similarity(claim_text, s))
 
     # Priority 1: Check numerical consistency
-    if numerical_check and numerical_check.get("verdict") == "NUMERICAL_MISMATCH":
-        diff_text = numerical_check.get("explanation", "Numerical distortion detected.")
+    if numerical_check:
+        num_v = numerical_check.get("verdict")
+        if num_v == "NUMERICAL_MISMATCH":
+            diff_text = numerical_check.get("explanation", "Numerical distortion detected.")
+            return {
+                "verdict": "UNSUPPORTED",
+                "explanation": f"Quantitative discrepancy detected: {diff_text}",
+                "evidence_quote": best_quote,
+                "limitations": "Quantitative values in manuscript conflict with source findings.",
+                "confidence_score": 0.90,
+                "confidence_label": "High",
+                "needs_human_review": True,
+                "contradiction_notes": diff_text,
+                "provider_used": "offline_rules",
+                "explainability": {
+                    "what_was_claimed": claim_text,
+                    "what_source_reported": best_quote,
+                    "what_matched": "Scientific subject topic",
+                    "what_did_not_match": diff_text,
+                    "why_assigned": "Claim asserts quantitative metrics conflicting with the cited source evidence.",
+                    "what_remains_uncertain": "Verify whether alternative cohorts or endpoints were measured."
+                }
+            }
+        elif num_v == "NUMERICAL_MATCH":
+            diff_text = numerical_check.get("explanation", "Quantitative metrics verified.")
+            return {
+                "verdict": "SUPPORTED",
+                "explanation": f"Source evidence directly substantiates the claim: {diff_text}",
+                "evidence_quote": best_quote,
+                "limitations": "Open literature excerpt directly corroborates claim assertions.",
+                "confidence_score": 0.92,
+                "confidence_label": "High",
+                "needs_human_review": False,
+                "contradiction_notes": "",
+                "provider_used": "offline_rules",
+                "explainability": {
+                    "what_was_claimed": claim_text,
+                    "what_source_reported": best_quote,
+                    "what_matched": "Exact quantitative figures and empirical findings match.",
+                    "what_did_not_match": "None",
+                    "why_assigned": "Retrieved primary evidence directly verifies stated numerical findings and conclusions.",
+                    "what_remains_uncertain": "None in the reported scope."
+                }
+            }
+
+    # Priority 2: Check explicit contradiction / negation cues
+    # Polar opposites: increase vs prevent/reduce/decrease
+    if re.search(r"\bincrease(s|d)?\b", claim_l) and re.search(r"\b(prevent(s|ed)?|reduce(s|d)?|decrease(s|d)?|avoid(s|ed)?)\b", evidence_l + " " + source_title.lower()):
         return {
-            "verdict": "UNSUPPORTED",
-            "explanation": f"Numerical discrepancy: {diff_text}",
-            "evidence_quote": best_quote,
-            "limitations": "Quantitative values in manuscript conflict with source data.",
-            "confidence_score": 0.88,
+            "verdict": "CONTRADICTORY",
+            "explanation": "Claim asserts an increase, but cited source evidence explicitly demonstrates prevention or reduction.",
+            "evidence_quote": best_quote or source_title,
+            "limitations": "Opposing empirical outcome reported in cited literature.",
+            "confidence_score": 0.90,
             "confidence_label": "High",
             "needs_human_review": True,
-            "contradiction_notes": diff_text,
+            "contradiction_notes": "Claim and cited evidence assert opposite directional findings.",
             "provider_used": "offline_rules",
             "explainability": {
                 "what_was_claimed": claim_text,
-                "what_source_reported": best_quote,
-                "what_matched": "Scientific subject topic",
-                "what_did_not_match": diff_text,
-                "why_assigned": "Claim asserts quantitative metrics not substantiated by the cited evidence.",
-                "what_remains_uncertain": "Verify whether alternative cohorts or endpoints were measured."
+                "what_source_reported": best_quote or source_title,
+                "what_matched": "Evaluated method/subject",
+                "what_did_not_match": "Directional effect (increase asserted vs prevention reported)",
+                "why_assigned": "Cited literature reports prevention/reduction rather than the asserted increase.",
+                "what_remains_uncertain": "None in the primary scope."
             }
         }
 
-    # Priority 2: Check explicit contradiction / negation cues
     negation_cues = [
         "failed to replicate", "no significant difference", "failed to show",
         "did not improve", "contradicts", "inconclusive", "refutes", "no evidence that"
@@ -246,31 +291,59 @@ def run_offline_verification(
                 }
             }
 
-    # Priority 3: Semantic similarity & overlap
-    sim = fuzzy_similarity(claim_text, evidence_text)
+    # Priority 3: Semantic similarity & keyword overlap with best quote
+    stop_words = {"the", "a", "an", "in", "on", "of", "to", "for", "and", "or", "is", "was", "were", "by", "that", "this", "with", "as"}
+    claim_words = {w for w in re.findall(r"\b[a-zA-Z0-9\.\-]{3,}\b", claim_l) if w not in stop_words}
+    ev_words = {w for w in re.findall(r"\b[a-zA-Z0-9\.\-]{3,}\b", (best_quote or evidence_text).lower()) if w not in stop_words}
+    overlap_ratio = len(claim_words.intersection(ev_words)) / max(1, len(claim_words))
+    sim_quote = fuzzy_similarity(claim_text, best_quote) if best_quote else 0.0
+
     claim_nums = extract_numbers_from_text(claim_text)
     ev_nums = extract_numbers_from_text(evidence_text)
+    num_vals_match = bool(claim_nums and any(n["value"] in [en["value"] for en in ev_nums] for n in claim_nums))
 
-    if sim > 0.45 or (claim_nums and any(n["value"] in [en["value"] for en in ev_nums] for n in claim_nums)):
-        verdict = "SUPPORTED" if sim > 0.60 else "PARTIALLY_SUPPORTED"
-        confidence = 0.85 if verdict == "SUPPORTED" else 0.70
+    if num_vals_match or overlap_ratio >= 0.45 or sim_quote >= 0.45:
+        verdict = "SUPPORTED" if (num_vals_match or overlap_ratio >= 0.50 or sim_quote >= 0.55) else "PARTIALLY_SUPPORTED"
+        confidence = 0.88 if verdict == "SUPPORTED" else 0.72
         return {
             "verdict": verdict,
-            "explanation": f"Retrieved source findings align with the claim (lexical overlap {sim:.2f}).",
+            "explanation": f"Retrieved source evidence substantiates the claim (keyword alignment: {int(overlap_ratio*100)}%).",
             "evidence_quote": best_quote,
-            "limitations": "Evaluated against open abstract context via rule engine.",
+            "limitations": "Evaluated against primary publication summary.",
             "confidence_score": confidence,
-            "confidence_label": "Medium",
+            "confidence_label": "High" if verdict == "SUPPORTED" else "Medium",
             "needs_human_review": False,
             "contradiction_notes": "",
             "provider_used": "offline_rules",
             "explainability": {
                 "what_was_claimed": claim_text,
                 "what_source_reported": best_quote,
-                "what_matched": "Key thematic and numerical terms corroborated",
-                "what_did_not_match": "None flagged in open excerpt",
-                "why_assigned": f"Substantial lexical and conceptual overlap ({sim:.2f}) observed.",
-                "what_remains_uncertain": "Full peer-reviewed publication should be reviewed for secondary endpoints."
+                "what_matched": "Key thematic and quantitative terms corroborated",
+                "what_did_not_match": "None flagged in retrieved passage",
+                "why_assigned": f"Substantial empirical overlap ({int(overlap_ratio*100)}%) observed in primary source.",
+                "what_remains_uncertain": "Secondary clinical endpoints."
+            }
+        }
+
+    # Priority 4: Citation mismatch or unindexed claim
+    if "could not be automatically retrieved" in evidence_text.lower():
+        return {
+            "verdict": "NEEDS_REVIEW",
+            "explanation": "The source paper could not be automatically retrieved from scholarly registries for verification.",
+            "evidence_quote": "",
+            "limitations": "Manual review required: publication abstract or full text not openly indexed.",
+            "confidence_score": 0.30,
+            "confidence_label": "Low",
+            "needs_human_review": True,
+            "contradiction_notes": "Unindexed source paper.",
+            "provider_used": "offline_rules",
+            "explainability": {
+                "what_was_claimed": claim_text,
+                "what_source_reported": "No open indexed record found.",
+                "what_matched": "None",
+                "what_did_not_match": "Source document missing from index",
+                "why_assigned": "Scholarly registries returned no matching work record.",
+                "what_remains_uncertain": "Full document verification required."
             }
         }
 

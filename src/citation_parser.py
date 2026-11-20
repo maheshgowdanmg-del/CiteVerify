@@ -56,8 +56,10 @@ def parse_reference_entry(raw_ref: str, fallback_marker: str = "") -> Dict[str, 
     else:
         content = clean_ref
 
-    # 2. Extract DOI
+    # 2. Extract DOI and arXiv ID
     doi = clean_doi(content)
+    arxiv_match = re.search(r"arXiv:\s*(\d{4}\.\d{4,5}(?:v\d+)?)", content, re.I)
+    arxiv_id = arxiv_match.group(1) if arxiv_match else ""
 
     # 3. Extract Year
     year = None
@@ -107,6 +109,7 @@ def parse_reference_entry(raw_ref: str, fallback_marker: str = "") -> Dict[str, 
         "authors": authors,
         "year": year,
         "doi": doi,
+        "arxiv": arxiv_id,
         "journal": journal,
         "verified_status": "UNVERIFIED"
     }
