@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
-from . import config
+from . import ai_provider, config
 from .gemini_engine import get_gemini_client
 from .utils import repair_json
 
@@ -42,16 +42,12 @@ def analyze_contradictions_across_studies(
             "population_differences": ["Single cohort evaluation."]
         }
 
-    # If Gemini is available, use Gemini for synthesis
-    client_tuple = get_gemini_client()
-    if client_tuple:
-        sdk_type, client = client_tuple
-        papers_summary = "\n\n".join(
-            f"Paper {i+1}: '{p.get('title')}' ({p.get('year')})\nAbstract/Passage: {p.get('abstract', '')[:600]}"
-            for i, p in enumerate(papers[:4])
-        )
+    papers_summary = "\n\n".join(
+        f"Paper {i+1}: '{p.get('title')}' ({p.get('year')})\nAbstract/Passage: {p.get('abstract', '')[:600]}"
+        for i, p in enumerate(papers[:4])
+    )
 
-        prompt = f"""
+    prompt = f"""
 Compare the findings of the following research papers regarding this topic and claim:
 
 Topic: "{topic}"
@@ -70,6 +66,20 @@ Return JSON with this structure:
   "population_differences": ["e.g. In-distribution scanner vs multi-hospital external cohort"]
 }}
 """
+    # Try unified AI Provider (Gemini / Groq)
+    if config.is_ai_configured() and config.get_active_provider() != "offline":
+        parsed, status = ai_provider.generate_structured_ai_response(
+            prompt=prompt,
+            system_instruction="You are a research synthesis specialist evaluating scientific consensus and literature contradictions.",
+            temperature=0.2
+        )
+        if parsed and isinstance(parsed, dict) and "consensus_status" in parsed:
+            return parsed
+
+    # Fallback to direct client if configured
+    client_tuple = get_gemini_client()
+    if client_tuple:
+        sdk_type, client = client_tuple
         try:
             if sdk_type == "genai":
                 resp = client.models.generate_content(

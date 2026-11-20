@@ -29,6 +29,30 @@ from .utils import extract_numbers_from_text, fuzzy_similarity, repair_json
 logger = logging.getLogger(__name__)
 
 
+def get_gemini_client():
+    """Create and return a configured Gemini GenAI client or module."""
+    if not config.is_gemini_configured():
+        return None
+
+    # Priority 1: Official Google GenAI SDK (google.genai)
+    try:
+        from google import genai
+        client = genai.Client(api_key=config.GEMINI_API_KEY, http_options={"api_version": "v1beta"})
+        return ("genai", client)
+    except Exception as e:
+        logger.debug(f"Could not initialize google.genai: {e}")
+
+    # Priority 2: google.generativeai
+    try:
+        import google.generativeai as gai
+        gai.configure(api_key=config.GEMINI_API_KEY)
+        return ("generativeai", gai)
+    except Exception as e:
+        logger.debug(f"Could not initialize google.generativeai: {e}")
+
+    return None
+
+
 def verify_claim(
     claim_text: str,
     evidence_text: str,
